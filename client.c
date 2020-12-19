@@ -23,26 +23,41 @@ void setupAddressStruct(struct sockaddr_in* address, int portNumber, char* hostn
 }
 
 int main(int argc, char *argv[]) {
-  int socketFD, portNumber, charsWritten, charsRead;
-  struct sockaddr_in serverAddress;
-  char buffer[256];
-  if (argc < 3) { 
-    fprintf(stderr,"USAGE: %s hostname port\n", argv[0]); 
-    exit(0); 
-  } 
+    int socketFD, portNumber, charsWritten, charsRead;
+    struct sockaddr_in serverAddress;
+    char buffer[256];
+    if (argc < 3) { 
+        fprintf(stderr,"USAGE: %s hostname port\n", argv[0]); 
+        exit(0); 
+    } 
 
-  socketFD = socket(AF_INET, SOCK_STREAM, 0); 
-  if (socketFD < 0){
-    error("CLIENT: ERROR opening socket");
-  }
+    socketFD = socket(AF_INET, SOCK_STREAM, 0); 
+    if (socketFD < 0){
+        perror("CLIENT: ERROR opening socket");
+        exit(1);
+    }
 
-  setupAddressStruct(&serverAddress, atoi(argv[2]), argv[1]);
+    setupAddressStruct(&serverAddress, atoi(argv[2]), argv[1]);
 
-  if (connect(socketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0){
-    error("CLIENT: ERROR connecting");
-  }
+    char username[20];    
+    printf("Enter a username: ");
+    scanf("%s", username);
+    printf("Username set to %s\n", username);
 
-  close(socketFD); 
+    if (connect(socketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0){
+        perror("CLIENT: ERROR connecting");
+        exit(1);
+    }
+
+    printf("Succesfully connected to server %d\n", atoi(argv[1]));
+
+    charsWritten = send(socketFD, username, strlen(username)+1, 0);
+    if (charsWritten < 0){
+        perror("CLIENT: ERROR writing to socket");
+        exit(1);
+    } 
+
+    close(socketFD); 
 
   return 0;
 }
