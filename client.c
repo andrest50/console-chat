@@ -25,7 +25,8 @@ void setupAddressStruct(struct sockaddr_in* address, int portNumber, char* hostn
 }
 
 int main(int argc, char *argv[]) {
-    int socketFD, portNumber, charsWritten, totalCharsWritten, charsRead, port = PORT;
+    int socketFD, portNumber, port = PORT;
+    int charsWritten, totalCharsWritten, charsRead, messagesSent = 0;
     struct sockaddr_in serverAddress;
     char buffer[256];
     /*if (argc < 2) { 
@@ -67,21 +68,27 @@ int main(int argc, char *argv[]) {
 
     do {
         buffer[0] = '\0';
+        //strcpy(buffer, getaline());
         printf("%s: ", username);
-        //fgets(buffer, 256, stdin);
-        scanf("%s", buffer);
-        if(buffer[strlen(buffer)-1] == '\n')
-            buffer[strlen(buffer)-1] = '\0';
+        if(times == 0)
+            fgets(buffer, 256, stdin);
+        fgets(buffer, 256, stdin);
+        buffer[strlen(buffer)-1] = '\0';
+            //fputs(buffer, stdout);
         totalCharsWritten = 0;
-        while(totalCharsWritten < strlen(buffer)){
-            charsWritten = send(socketFD, buffer + totalCharsWritten, 256, 0);
+        //printf("buffer length: %ld\n", strlen(buffer));
+        charsWritten = send(socketFD, buffer, strlen(buffer)+1, 0);
+        /*while(totalCharsWritten < strlen(buffer)){
+            charsWritten = send(socketFD, buffer + totalCharsWritten, strlen(buffer), 0);
+            printf("chars written: %d\n", charsWritten);
             totalCharsWritten += charsWritten;
-        }
-        charsWritten = send(socketFD, "@@", 3, 0);
+        }*/
+        //charsWritten = send(socketFD, "@@", 3, 0);
 
         buffer[0] = '\0';
         charsRead = recv(socketFD, buffer, 256, 0);
-        printf("[%d]:%s\n", charsRead, buffer);
+        //printf("[%d]:%s\n", charsRead, buffer);
+        messagesSent++;
     } while(strcmp(buffer, "exit()") != 0);
 
     close(socketFD); 

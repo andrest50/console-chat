@@ -49,6 +49,12 @@ int main(int argc, char* argv[]){
             exit(1);
         }
 
+        int pipeFDs[2];
+        if(pipe(pipeFDs) == -1){
+            perror("Call to pipe() failed");
+            exit(1);
+        }
+
         pid_t spawnid = -5;
         spawnid = fork();
 
@@ -61,7 +67,10 @@ int main(int argc, char* argv[]){
                 char buffer[256];
                 char fullBuffer[256];
 
+                close(pipeFDs[0]);
+
                 int charsRead = recv(connectionSocket, usernames[connectionsMade], 20, 0);
+                write(pipeFDs[1], usernames[connectionsMade], 20);
                 printf("%s connected.\n", usernames[connectionsMade]);
                 printf("Clients connected: %d\n", connectionsMade + 1);
                 for(int i = 0; i <= connectionsMade; i++){
@@ -72,14 +81,17 @@ int main(int argc, char* argv[]){
                 do {
                     fullBuffer[0] = '\0';
                     buffer[0] = '\0';
-                    while(strcmp(buffer, "@@") != 0){
+                    charsRead = recv(connectionSocket, fullBuffer, 256, 0);
+                    /*while(strcmp(buffer, "@@") != 0){
                         buffer[0] = '\0';
                         charsRead = recv(connectionSocket, buffer, 256, 0);
                         if(strcmp(buffer, "@@") != 0){
                             strcat(fullBuffer, buffer);
                         }     
-                    }
-                    printf("%s\n", fullBuffer);
+                    }*/
+                    if(strcmp(fullBuffer, "exit()") != 0){
+                        printf("%s: %s\n", usernames[connectionsMade], fullBuffer);
+                    }                       
                     charsWritten = send(connectionSocket, fullBuffer, strlen(fullBuffer)+1, 0);
                 } while(strcmp(fullBuffer, "exit()") != 0);
 
@@ -90,6 +102,8 @@ int main(int argc, char* argv[]){
                 break;
             default:
                 ;
+                close(pipeFDs[1]);
+                charsRead = read(pipeFDs[0], usernames[connectionsMade], 20);
                 pid_t childPid = waitpid(spawnid, &processes[connectionsMade], WNOHANG);
                 close(connectionSocket);
                 break;
