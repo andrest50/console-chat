@@ -16,6 +16,33 @@ void setupAddressStruct(struct sockaddr_in* address, int portNumber){
   address->sin_addr.s_addr = INADDR_ANY;
 }
 
+void checkBgProcesses(int* processes, int connectionsMade){
+    for(int i = 0; i < connectionsMade; i++){
+        int childStatus = 1;
+        pid_t childPid = waitpid(processes[connectionsMade-1], &childStatus, WNOHANG);
+        if (WIFEXITED(childStatus)) {
+            printf("background pid %d is done : exit value %d\n", processes[i], WEXITSTATUS(childStatus));
+            processes[i] = 0;
+        }
+        else if(WIFSIGNALED(childStatus) == SIGKILL){
+            printf("background pid %d is done: terminated by signal %d\n", processes[i], WTERMSIG(childStatus));
+            processes[i] = 0;
+        }
+        else if (WIFSIGNALED(childStatus) == SIGTERM || kill(processes[i], 0) == -1) {
+            printf("background pid %d is done: terminated by signal %d\n", processes[i], WTERMSIG(childStatus));
+            processes[i] = 0;
+        }
+    }
+}
+
+void displayConnected(char usernames[5][20], int connectionsMade){
+    printf("%s connected.\n", usernames[connectionsMade]);
+    printf("Users connected: %d\n", connectionsMade + 1);
+    for(int i = 0; i <= connectionsMade; i++){
+        printf("%s is online.\n", usernames[i]);
+    }
+}
+
 int main(int argc, char* argv[]){
     int connectionSocket, charsRead, connectionsMade = 0;
     char usernames[5][20];
@@ -64,31 +91,20 @@ int main(int argc, char* argv[]){
                 exit(1);
             case 0:
                 ;
-                char buffer[256];
+                //char buffer[256];
                 char fullBuffer[256];
 
                 close(pipeFDs[0]);
 
                 int charsRead = recv(connectionSocket, usernames[connectionsMade], 20, 0);
                 write(pipeFDs[1], usernames[connectionsMade], 20);
-                printf("%s connected.\n", usernames[connectionsMade]);
-                printf("Clients connected: %d\n", connectionsMade + 1);
-                for(int i = 0; i <= connectionsMade; i++){
-                    printf("%s is online.\n", usernames[i]);
-                }
+                displayConnected(usernames, connectionsMade);
 
                 int charsWritten = 0;
                 do {
                     fullBuffer[0] = '\0';
-                    buffer[0] = '\0';
+                    //buffer[0] = '\0';
                     charsRead = recv(connectionSocket, fullBuffer, 256, 0);
-                    /*while(strcmp(buffer, "@@") != 0){
-                        buffer[0] = '\0';
-                        charsRead = recv(connectionSocket, buffer, 256, 0);
-                        if(strcmp(buffer, "@@") != 0){
-                            strcat(fullBuffer, buffer);
-                        }     
-                    }*/
                     if(strcmp(fullBuffer, "exit()") != 0){
                         printf("%s: %s\n", usernames[connectionsMade], fullBuffer);
                     }                       
@@ -105,28 +121,14 @@ int main(int argc, char* argv[]){
                 close(pipeFDs[1]);
                 charsRead = read(pipeFDs[0], usernames[connectionsMade], 20);
                 pid_t childPid = waitpid(spawnid, &processes[connectionsMade], WNOHANG);
+                processes[connectionsMade] = spawnid;
                 close(connectionSocket);
                 break;
         }
 
         connectionsMade++;
 
-        for(int i = 0; i < connectionsMade; i++){
-            int childStatus = 1;
-            pid_t childPid = waitpid(processes[connectionsMade-1], &childStatus, WNOHANG);
-            if (WIFEXITED(childStatus)) {
-				printf("background pid %d is done : exit value %d\n", processes[i], WEXITSTATUS(childStatus));
-				processes[i] = 0;
-			}
-			else if(WIFSIGNALED(childStatus) == SIGKILL){
-				printf("background pid %d is done: terminated by signal %d\n", processes[i], WTERMSIG(childStatus));
-				processes[i] = 0;
-			}
-			else if (WIFSIGNALED(childStatus) == SIGTERM || kill(processes[i], 0) == -1) {
-				printf("background pid %d is done: terminated by signal %d\n", processes[i], WTERMSIG(childStatus));
-				processes[i] = 0;
-			}
-        }
+        checkBgProcesses(processes, connectionsMade);
 
     }
 
@@ -134,3 +136,13 @@ int main(int argc, char* argv[]){
 
     return 0;
 }
+
+//For larger messages
+
+/*while(strcmp(buffer, "@@") != 0){
+    buffer[0] = '\0';
+    charsRead = recv(connectionSocket, buffer, 256, 0);
+    if(strcmp(buffer, "@@") != 0){
+        strcat(fullBuffer, buffer);
+    }     
+}*/
