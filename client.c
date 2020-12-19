@@ -6,6 +6,8 @@
 #include <sys/socket.h> 
 #include <netdb.h>     
 
+#define PORT 52500
+
 void setupAddressStruct(struct sockaddr_in* address, int portNumber, char* hostname){
  
   memset((char*) address, '\0', sizeof(*address)); 
@@ -23,13 +25,16 @@ void setupAddressStruct(struct sockaddr_in* address, int portNumber, char* hostn
 }
 
 int main(int argc, char *argv[]) {
-    int socketFD, portNumber, charsWritten, charsRead;
+    int socketFD, portNumber, charsWritten, totalCharsWritten, charsRead, port = PORT;
     struct sockaddr_in serverAddress;
     char buffer[256];
-    if (argc < 2) { 
+    /*if (argc < 2) { 
         fprintf(stderr,"USAGE: %s port\n", argv[0]); 
         exit(0); 
-    } 
+    } */
+    if(argc > 2){
+        port = atoi(argv[1]);
+    }
 
     socketFD = socket(AF_INET, SOCK_STREAM, 0); 
     if (socketFD < 0){
@@ -37,7 +42,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    setupAddressStruct(&serverAddress, atoi(argv[1]), "localhost");
+    setupAddressStruct(&serverAddress, port, "localhost");
 
     char username[20];    
     do {
@@ -51,7 +56,8 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    printf("Succesfully connected to server %d\n", atoi(argv[1]));
+    printf("Succesfully connected to server %d\n", port);
+    //printf("Succesfully connected to server %d\n", atoi(argv[1]));
 
     charsWritten = send(socketFD, username, strlen(username)+1, 0);
     if (charsWritten < 0){
@@ -60,9 +66,22 @@ int main(int argc, char *argv[]) {
     } 
 
     do {
+        buffer[0] = '\0';
         printf("%s: ", username);
+        //fgets(buffer, 256, stdin);
         scanf("%s", buffer);
-        charsWritten = send(socketFD, buffer, strlen(buffer)+1, 0);
+        if(buffer[strlen(buffer)-1] == '\n')
+            buffer[strlen(buffer)-1] = '\0';
+        totalCharsWritten = 0;
+        while(totalCharsWritten < strlen(buffer)){
+            charsWritten = send(socketFD, buffer + totalCharsWritten, 256, 0);
+            totalCharsWritten += charsWritten;
+        }
+        charsWritten = send(socketFD, "@@", 3, 0);
+
+        buffer[0] = '\0';
+        charsRead = recv(socketFD, buffer, 256, 0);
+        printf("[%d]:%s\n", charsRead, buffer);
     } while(strcmp(buffer, "exit()") != 0);
 
     close(socketFD); 

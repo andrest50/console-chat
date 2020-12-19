@@ -59,31 +59,43 @@ int main(int argc, char* argv[]){
             case 0:
                 ;
                 char buffer[256];
+                char fullBuffer[256];
 
-                connectionsMade++;
-
-                int charsRead = recv(connectionSocket, usernames[connectionsMade-1], 20, 0);
-                printf("%s connected.\n", usernames[connectionsMade-1]);
-                printf("%d\n", connectionsMade);
-                for(int i = 0; i < connectionsMade; i++){
+                int charsRead = recv(connectionSocket, usernames[connectionsMade], 20, 0);
+                printf("%s connected.\n", usernames[connectionsMade]);
+                printf("Clients connected: %d\n", connectionsMade + 1);
+                for(int i = 0; i <= connectionsMade; i++){
                     printf("%s is online.\n", usernames[i]);
                 }
 
+                int charsWritten = 0;
                 do {
-                    charsRead = recv(connectionSocket, buffer, 256, 0);
-                } while(strcmp(buffer, "exit()") != 0);
+                    fullBuffer[0] = '\0';
+                    buffer[0] = '\0';
+                    while(strcmp(buffer, "@@") != 0){
+                        buffer[0] = '\0';
+                        charsRead = recv(connectionSocket, buffer, 256, 0);
+                        if(strcmp(buffer, "@@") != 0){
+                            strcat(fullBuffer, buffer);
+                        }     
+                    }
+                    printf("%s\n", fullBuffer);
+                    charsWritten = send(connectionSocket, fullBuffer, strlen(fullBuffer)+1, 0);
+                } while(strcmp(fullBuffer, "exit()") != 0);
 
-                printf("%s has left.\n", usernames[connectionsMade-1]); 
+                printf("%s has left.\n", usernames[connectionsMade]); 
                 close(connectionSocket);
                 exit(0);
 
                 break;
             default:
                 ;
-                pid_t childPid = waitpid(spawnid, &processes[connectionsMade-1], WNOHANG);
+                pid_t childPid = waitpid(spawnid, &processes[connectionsMade], WNOHANG);
                 close(connectionSocket);
                 break;
         }
+
+        connectionsMade++;
 
         for(int i = 0; i < connectionsMade; i++){
             int childStatus = 1;
