@@ -26,8 +26,8 @@ int main(int argc, char *argv[]) {
     int socketFD, portNumber, charsWritten, charsRead;
     struct sockaddr_in serverAddress;
     char buffer[256];
-    if (argc < 3) { 
-        fprintf(stderr,"USAGE: %s hostname port\n", argv[0]); 
+    if (argc < 2) { 
+        fprintf(stderr,"USAGE: %s port\n", argv[0]); 
         exit(0); 
     } 
 
@@ -37,11 +37,13 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    setupAddressStruct(&serverAddress, atoi(argv[2]), argv[1]);
+    setupAddressStruct(&serverAddress, atoi(argv[1]), "localhost");
 
     char username[20];    
-    printf("Enter a username: ");
-    scanf("%s", username);
+    do {
+        printf("Enter a username: ");
+        scanf("%s", username);
+    } while(strlen(username) > 20);
     printf("Username set to %s\n", username);
 
     if (connect(socketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0){
@@ -56,6 +58,12 @@ int main(int argc, char *argv[]) {
         perror("CLIENT: ERROR writing to socket");
         exit(1);
     } 
+
+    do {
+        printf("%s: ", username);
+        scanf("%s", buffer);
+        charsWritten = send(socketFD, buffer, strlen(buffer)+1, 0);
+    } while(strcmp(buffer, "exit()") != 0);
 
     close(socketFD); 
 
