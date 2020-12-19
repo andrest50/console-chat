@@ -44,7 +44,8 @@ void displayConnected(char usernames[5][20], int connectionsMade){
 }
 
 int main(int argc, char* argv[]){
-    int connectionSocket, charsRead, connectionsMade = 0;
+    int charsRead, connectionsMade = 0;
+    int connectionSockets[5];
     char usernames[5][20];
     int processes[5];
     struct sockaddr_in serverAddress, clientAddress;
@@ -69,9 +70,9 @@ int main(int argc, char* argv[]){
     listen(listenSocket, 5); 
 
     while(1){
-        connectionSocket = accept(listenSocket, (struct sockaddr *)&clientAddress, &sizeOfClientInfo); 
+        connectionSockets[connectionsMade] = accept(listenSocket, (struct sockaddr *)&clientAddress, &sizeOfClientInfo); 
         
-        if (connectionSocket < 0){
+        if (connectionSockets[connectionsMade] < 0){
             perror("ERROR on accept");
             exit(1);
         }
@@ -91,28 +92,34 @@ int main(int argc, char* argv[]){
                 exit(1);
             case 0:
                 ;
-                //char buffer[256];
+                char buffer[256];
                 char fullBuffer[256];
 
                 close(pipeFDs[0]);
 
-                int charsRead = recv(connectionSocket, usernames[connectionsMade], 20, 0);
+                int charsRead = recv(connectionSockets[connectionsMade], usernames[connectionsMade], 20, 0);
                 write(pipeFDs[1], usernames[connectionsMade], 20);
+                printf("Connected with socket fd: %d\n", connectionSockets[connectionsMade]);
                 displayConnected(usernames, connectionsMade);
 
                 int charsWritten = 0;
                 do {
                     fullBuffer[0] = '\0';
                     //buffer[0] = '\0';
-                    charsRead = recv(connectionSocket, fullBuffer, 256, 0);
+                    charsRead = recv(connectionSockets[connectionsMade], fullBuffer, 256, 0);
                     if(strcmp(fullBuffer, "exit()") != 0){
                         printf("%s: %s\n", usernames[connectionsMade], fullBuffer);
-                    }                       
-                    charsWritten = send(connectionSocket, fullBuffer, strlen(fullBuffer)+1, 0);
+                    }
+                    strcpy(buffer, usernames[connectionsMade]);
+                    strcat(buffer, ": ");
+                    strcat(buffer, fullBuffer);
+                    for(int i = 0; i <= 4; i++){
+                        charsWritten = send(connectionSockets[i], buffer, strlen(buffer)+1, 0);
+                    }                                           
                 } while(strcmp(fullBuffer, "exit()") != 0);
 
                 printf("%s has left.\n", usernames[connectionsMade]); 
-                close(connectionSocket);
+                close(connectionSockets[connectionsMade]);
                 exit(0);
 
                 break;
@@ -122,14 +129,13 @@ int main(int argc, char* argv[]){
                 charsRead = read(pipeFDs[0], usernames[connectionsMade], 20);
                 pid_t childPid = waitpid(spawnid, &processes[connectionsMade], WNOHANG);
                 processes[connectionsMade] = spawnid;
-                close(connectionSocket);
+                //close(connectionSockets[connectionsMade]);
                 break;
         }
 
         connectionsMade++;
 
         checkBgProcesses(processes, connectionsMade);
-
     }
 
     close(listenSocket); 

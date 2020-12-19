@@ -4,10 +4,12 @@
 #include <string.h>
 #include <sys/types.h>  
 #include <sys/socket.h> 
-#include <netdb.h>     
+#include <netdb.h>
+#include <sys/wait.h>
+#include <signal.h>     
 
 #define PORT 52500
-#define DEBUG 0
+#define DEBUG 1
 
 void setupAddressStruct(struct sockaddr_in* address, int portNumber, char* hostname){
  
@@ -47,6 +49,7 @@ int main(int argc, char *argv[]) {
     int charsWritten, totalCharsWritten, charsRead, messagesSent = 0;
     struct sockaddr_in serverAddress;
     char buffer[256];
+    char readBuffer[256];
 
     if (argc < 2) { 
         fprintf(stderr,"USAGE: %s port\n", argv[0]); 
@@ -80,24 +83,47 @@ int main(int argc, char *argv[]) {
         exit(1);
     } 
 
-    do {
-        getMessage(buffer, username, messagesSent);
-        
-        totalCharsWritten = 0;
-        if(DEBUG == 1)
-            printf("buffer length: %ld\n", strlen(buffer));
-        charsWritten = send(socketFD, buffer, strlen(buffer)+1, 0);
+    pid_t spawnid;
+    spawnid = fork();
+    switch(spawnid){
+        case -1:
+            perror("fork() failed");
+            exit(1);
+        case 0:
+            while(1){
+                charsRead = recv(socketFD, readBuffer, 256, 0);
+                if(!strstr(readBuffer, username)){
+                    printf("[Here]%s\n", readBuffer);
+                    readBuffer[0] = '\0';
+                }
+            }
+            exit(0);
+            break;
+        default:
+            ;
+            int childStatus;
+            pid_t childPid = waitpid(spawnid, &childStatus, WNOHANG);
+            do {
+                getMessage(buffer, username, messagesSent);
+                
+                totalCharsWritten = 0;
+                if(DEBUG == 1)
+                    printf("buffer length: %ld\n", strlen(buffer));
+                charsWritten = send(socketFD, buffer, strlen(buffer)+1, 0);
+                messagesSent++;
 
-        buffer[0] = '\0';
-        charsRead = recv(socketFD, buffer, 256, 0);
-        if(DEBUG == 1)
-            printf("[%d]:%s\n", charsRead, buffer);
-        messagesSent++;
-    } while(strcmp(buffer, "exit()") != 0);
-
+                //buffer[0] = '\0';
+                //charsRead = recv(socketFD, buffer, 256, 0);
+                //if(DEBUG == 1)
+                    //printf("[%d]%s\n", charsRead, buffer);
+            } while(!strstr(buffer, "exit()"));
+            
+            kill(childPid, SIGKILL);
+            break;
+    }
     close(socketFD); 
 
-  return 0;
+    return 0;
 }
 
 //For larger messages
