@@ -6,7 +6,9 @@
 #include <sys/socket.h> 
 #include <netdb.h>
 #include <sys/wait.h>
-#include <signal.h>     
+#include <signal.h>    
+#include <poll.h>
+#include <sys/select.h> 
 
 #define PORT 52500
 #define DEBUG 0
@@ -37,11 +39,25 @@ void getUserName(char* username){
 
 void getMessage(char* buffer, char* username, int messagesSent){
     buffer[0] = '\0';
-    printf("%s: ", username);
+    //printf("%s: ", username);
     if(messagesSent == 0)
         fgets(buffer, 256, stdin);
     fgets(buffer, 256, stdin);
+    //printf("here2\n");
     buffer[strlen(buffer)-1] = '\0';
+}
+
+void receivedMessage(char* readBuffer, char* username){
+     if(!strstr(readBuffer, username)){
+        if(strstr(readBuffer, "exit()")){
+            printf("A user left.\n");
+        }
+        else {
+            printf("%s\n", readBuffer);
+        }
+        //printf("%s: ", username);
+        readBuffer[0] = '\0';
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -83,7 +99,44 @@ int main(int argc, char *argv[]) {
         exit(1);
     } 
 
-    pid_t spawnid;
+    //use select() for multiplexing, listening to stdin and socket
+    fd_set rfds;
+    
+    //loop
+
+    do {
+        FD_ZERO(&rfds);
+        FD_SET(0, &rfds);
+        FD_SET(socketFD, &rfds);
+        if(select(socketFD + 1, &rfds, NULL, NULL, NULL) == -1){
+            perror("select()");
+            exit(1);
+        }
+        if(FD_ISSET(0, &rfds)){
+            //printf("here2\n");
+             getMessage(buffer, username, messagesSent);
+        
+            totalCharsWritten = 0;
+            if(DEBUG == 1)
+                printf("buffer length: %ld\n", strlen(buffer));
+            charsWritten = send(socketFD, buffer, strlen(buffer)+1, 0);
+            messagesSent++;
+        }
+        if(FD_ISSET(socketFD, &rfds)){
+            //printf("here\n");
+            charsRead = read(socketFD, readBuffer, 256);
+            if(charsRead == -1){
+                perror("read()");
+                exit(1);
+            }
+            receivedMessage(readBuffer, username);
+        }
+
+        //buffer[0] = '\0';
+        //charsRead = recv(socketFD, buffer, 256, 0);
+    } while(!strstr(buffer, "exit()"));
+
+    /*pid_t spawnid;
     spawnid = fork();
     switch(spawnid){
         case -1:
@@ -92,21 +145,12 @@ int main(int argc, char *argv[]) {
         case 0:
             while(1){
                 charsRead = recv(socketFD, readBuffer, 256, 0);
+                //printf("here\n");
                 if(charsRead == -1){
                     perror("recv()");
                     exit(1);
                 }
-                if(!strstr(readBuffer, username)){
-                    if(strstr(readBuffer, "exit()")){
-                        printf("\nA user left.\n");
-                        printf("%s: ", username);
-                    }
-                    else {
-                        printf("\n%s\n", readBuffer);
-                        readBuffer[0] = '\0';
-                        printf("%s: ", username);
-                    }
-                }
+                receivedMessage(readBuffer, username);
             }
             exit(0);
             break;
@@ -131,7 +175,7 @@ int main(int argc, char *argv[]) {
             
             kill(childPid, SIGKILL);
             break;
-    }
+    }*/
     close(socketFD); 
 
     return 0;
