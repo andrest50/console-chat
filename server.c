@@ -7,6 +7,20 @@
 #include <netinet/in.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <pthread.h>
+
+//global variables
+pthread_t threads[5];
+//int connectionSockets[5];
+//char usernames[5][20];
+struct user* users[5];
+int connectionsMade = 0;
+
+struct user {
+    int userNo;
+    char username[20];
+    int userSocket;
+};
 
 void setupAddressStruct(struct sockaddr_in* address, int portNumber){
  
@@ -16,38 +30,47 @@ void setupAddressStruct(struct sockaddr_in* address, int portNumber){
   address->sin_addr.s_addr = INADDR_ANY;
 }
 
-void checkBgProcesses(int* processes, int connectionsMade){
+void displayConnected(struct user* user){
+    printf("%s connected.\n", user->username);
+    printf("Users connected: %d\n", connectionsMade);
     for(int i = 0; i < connectionsMade; i++){
-        int childStatus = 1;
-        pid_t childPid = waitpid(processes[connectionsMade-1], &childStatus, WNOHANG);
-        if (WIFEXITED(childStatus)) {
-            printf("background pid %d is done : exit value %d\n", processes[i], WEXITSTATUS(childStatus));
-            processes[i] = 0;
-        }
-        else if(WIFSIGNALED(childStatus) == SIGKILL){
-            printf("background pid %d is done: terminated by signal %d\n", processes[i], WTERMSIG(childStatus));
-            processes[i] = 0;
-        }
-        else if (WIFSIGNALED(childStatus) == SIGTERM || kill(processes[i], 0) == -1) {
-            printf("background pid %d is done: terminated by signal %d\n", processes[i], WTERMSIG(childStatus));
-            processes[i] = 0;
-        }
+        printf("%s is online.\n", users[i]->username);
     }
 }
 
-void displayConnected(char usernames[5][20], int connectionsMade){
-    printf("%s connected.\n", usernames[connectionsMade]);
-    printf("Users connected: %d\n", connectionsMade + 1);
-    for(int i = 0; i <= connectionsMade; i++){
-        printf("%s is online.\n", usernames[i]);
-    }
+void* connection(void* arg){
+    struct user* user = arg;
+    int charsRead = 0, charsWritten = 0;
+    char message[256];
+    char packaging[256];
+
+    //read username
+    charsRead = recv(user->userSocket, user->username, 20, 0);
+    printf("Connected with socket fd: %d\n", user->userSocket);
+    displayConnected(user);
+
+    //read messages and send to other users
+    do {
+        message[0] = '\0';
+        //buffer[0] = '\0';
+        charsRead = recv(user->userSocket, message, 256, 0);
+        if(strcmp(message, "exit()") != 0){
+            printf("%s: %s\n", user->username, message);
+        }
+        strcpy(packaging, user->username);
+        strcat(packaging, ": ");
+        strcat(packaging, message);
+        for(int i = 0; i < connectionsMade; i++){
+            charsWritten = send(users[i]->userSocket, packaging, strlen(packaging)+1, 0);
+        }                                           
+    } while(strcmp(message, "exit()") != 0);
+
+    printf("%s has left.\n", user->username); 
+    close(user->userSocket);
 }
 
 int main(int argc, char* argv[]){
-    int charsRead, connectionsMade = 0;
-    int connectionSockets[5];
-    char usernames[5][20];
-    int processes[5];
+    int connectionSocket;
     struct sockaddr_in serverAddress, clientAddress;
     socklen_t sizeOfClientInfo = sizeof(clientAddress);
 
@@ -70,72 +93,23 @@ int main(int argc, char* argv[]){
     listen(listenSocket, 5); 
 
     while(1){
-        connectionSockets[connectionsMade] = accept(listenSocket, (struct sockaddr *)&clientAddress, &sizeOfClientInfo); 
-        
-        if (connectionSockets[connectionsMade] < 0){
+        connectionSocket = accept(listenSocket, (struct sockaddr *)&clientAddress, &sizeOfClientInfo); 
+        if (connectionSocket < 0){
             perror("ERROR on accept");
             exit(1);
         }
 
-        int pipeFDs[2];
-        if(pipe(pipeFDs) == -1){
-            perror("Call to pipe() failed");
-            exit(1);
-        }
+        users[connectionsMade] = malloc(sizeof(struct user));
+        users[connectionsMade]->userSocket = connectionSocket;
+        users[connectionsMade]->userNo = connectionsMade;
 
-        pid_t spawnid = -5;
-        spawnid = fork();
-
-        switch(spawnid){
-            case -1:
-                perror("fork() failed");
-                exit(1);
-            case 0:
-                ;
-                char buffer[256];
-                char fullBuffer[256];
-
-                close(pipeFDs[0]);
-
-                int charsRead = recv(connectionSockets[connectionsMade], usernames[connectionsMade], 20, 0);
-                write(pipeFDs[1], usernames[connectionsMade], 20);
-                printf("Connected with socket fd: %d\n", connectionSockets[connectionsMade]);
-                displayConnected(usernames, connectionsMade);
-
-                int charsWritten = 0;
-                do {
-                    fullBuffer[0] = '\0';
-                    //buffer[0] = '\0';
-                    charsRead = recv(connectionSockets[connectionsMade], fullBuffer, 256, 0);
-                    if(strcmp(fullBuffer, "exit()") != 0){
-                        printf("%s: %s\n", usernames[connectionsMade], fullBuffer);
-                    }
-                    strcpy(buffer, usernames[connectionsMade]);
-                    strcat(buffer, ": ");
-                    strcat(buffer, fullBuffer);
-                    for(int i = 0; i <= 4; i++){
-                        charsWritten = send(connectionSockets[i], buffer, strlen(buffer)+1, 0);
-                    }                                           
-                } while(strcmp(fullBuffer, "exit()") != 0);
-
-                printf("%s has left.\n", usernames[connectionsMade]); 
-                close(connectionSockets[connectionsMade]);
-                exit(0);
-
-                break;
-            default:
-                ;
-                close(pipeFDs[1]);
-                charsRead = read(pipeFDs[0], usernames[connectionsMade], 20);
-                pid_t childPid = waitpid(spawnid, &processes[connectionsMade], WNOHANG);
-                processes[connectionsMade] = spawnid;
-                //close(connectionSockets[connectionsMade]);
-                break;
-        }
+        pthread_create(&threads[connectionsMade], NULL, connection, (void*) users[connectionsMade]);
 
         connectionsMade++;
+    }
 
-        checkBgProcesses(processes, connectionsMade);
+    for(int i = 0; i < connectionsMade; i++){
+        pthread_join(threads[i], NULL);
     }
 
     close(listenSocket); 

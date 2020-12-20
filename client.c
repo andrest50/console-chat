@@ -9,7 +9,7 @@
 #include <signal.h>     
 
 #define PORT 52500
-#define DEBUG 1
+#define DEBUG 0
 
 void setupAddressStruct(struct sockaddr_in* address, int portNumber, char* hostname){
  
@@ -92,9 +92,20 @@ int main(int argc, char *argv[]) {
         case 0:
             while(1){
                 charsRead = recv(socketFD, readBuffer, 256, 0);
+                if(charsRead == -1){
+                    perror("recv()");
+                    exit(1);
+                }
                 if(!strstr(readBuffer, username)){
-                    printf("[Here]%s\n", readBuffer);
-                    readBuffer[0] = '\0';
+                    if(strstr(readBuffer, "exit()")){
+                        printf("\nA user left.\n");
+                        printf("%s: ", username);
+                    }
+                    else {
+                        printf("\n%s\n", readBuffer);
+                        readBuffer[0] = '\0';
+                        printf("%s: ", username);
+                    }
                 }
             }
             exit(0);
