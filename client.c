@@ -37,6 +37,11 @@ void getUserName(char* username){
     printf("Username set to %s\n", username);
 }
 
+void checkMessage(char* buffer){
+    //if(strcmp(buffer, "$users")){       
+    //}
+}
+
 void getMessage(char* buffer, char* username, int messagesSent){
     buffer[0] = '\0';
     //printf("%s: ", username);
@@ -47,22 +52,46 @@ void getMessage(char* buffer, char* username, int messagesSent){
     buffer[strlen(buffer)-1] = '\0';
 }
 
-void receivedMessage(char* readBuffer, char* username){
+void receivedMessage(char* readBuffer, char* buffer, char* username){
      if(!strstr(readBuffer, username)){
         if(strstr(readBuffer, "exit()")){
-            printf("A user left.\n");
+            char userWhoLeft[20];
+            strcpy(userWhoLeft, strtok(readBuffer, ":"));
+            printf("%s left.\n", userWhoLeft);
         }
         else {
-            printf("%s\n", readBuffer);
+            if ((fseek(stdin, 0, SEEK_END), ftell(stdin)) > 0){
+                fprintf(stdout, "\n%s\n", readBuffer);
+            }
+            else {
+                printf("%s\n", readBuffer);
+                fflush(stdout);
+            }
         }
         //printf("%s: ", username);
         readBuffer[0] = '\0';
     }
 }
 
+void returnMessage(int socketFD, char* buffer){
+    char preMessage[5];
+    int charsRead = recv(socketFD, preMessage, 2, 0);
+    charsRead = recv(socketFD, buffer, 256, 0);
+    if(strcmp(preMessage, "$") == 0)
+        printf("%s\n", buffer);
+    buffer[0] = '\0';
+}
+
+void sendMessage(int socketFD, char* buffer){
+    if(DEBUG == 1)
+        printf("buffer length: %ld\n", strlen(buffer));
+    int charsWritten = send(socketFD, buffer, strlen(buffer)+1, 0);
+    buffer[0] = '\0';
+}
+
 int main(int argc, char *argv[]) {
     int socketFD, portNumber, port = PORT;
-    int charsWritten, totalCharsWritten, charsRead, messagesSent = 0;
+    int charsWritten, charsRead, messagesSent = 0;
     struct sockaddr_in serverAddress;
     char buffer[256];
     char readBuffer[256];
@@ -114,12 +143,11 @@ int main(int argc, char *argv[]) {
         }
         if(FD_ISSET(0, &rfds)){
             //printf("here2\n");
-             getMessage(buffer, username, messagesSent);
-        
-            totalCharsWritten = 0;
-            if(DEBUG == 1)
-                printf("buffer length: %ld\n", strlen(buffer));
-            charsWritten = send(socketFD, buffer, strlen(buffer)+1, 0);
+            getMessage(buffer, username, messagesSent);
+            checkMessage(buffer);
+            sendMessage(socketFD, buffer);
+            returnMessage(socketFD, buffer);
+            
             messagesSent++;
         }
         if(FD_ISSET(socketFD, &rfds)){
@@ -129,11 +157,9 @@ int main(int argc, char *argv[]) {
                 perror("read()");
                 exit(1);
             }
-            receivedMessage(readBuffer, username);
+            receivedMessage(readBuffer, buffer, username);
         }
 
-        //buffer[0] = '\0';
-        //charsRead = recv(socketFD, buffer, 256, 0);
     } while(!strstr(buffer, "exit()"));
 
     /*pid_t spawnid;

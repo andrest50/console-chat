@@ -11,8 +11,6 @@
 
 //global variables
 pthread_t threads[5];
-//int connectionSockets[5];
-//char usernames[5][20];
 struct user* users[5];
 int connectionsMade = 0;
 
@@ -31,11 +29,49 @@ void setupAddressStruct(struct sockaddr_in* address, int portNumber){
 }
 
 void displayConnected(struct user* user){
+    int charsWritten;
+    char joinMsg[30];
+    char connectionsMsg[20];
+
     printf("%s connected.\n", user->username);
-    printf("Users connected: %d\n", connectionsMade);
+    sprintf(connectionsMsg, "Users connected: %d", connectionsMade);
+    printf("%s\n", connectionsMsg);
     for(int i = 0; i < connectionsMade; i++){
         printf("%s is online.\n", users[i]->username);
+        for(int j = 0; j < connectionsMade; j++){
+            strcpy(joinMsg, users[i]->username);
+            if(user->userNo == j){
+                strcat(joinMsg, " is online.");
+            }
+            else {
+                strcat(joinMsg, " has joined.");
+            }
+            //charsWritten = send(users[j]->userSocket, connectionsMsg, strlen(connectionsMsg)+1, 0);
+            charsWritten = send(users[j]->userSocket, joinMsg, strlen(joinMsg)+1, 0);
+            joinMsg[0] = '\0';  
+        }
+        if(i == user->userNo){
+            charsWritten = send(users[i]->userSocket, connectionsMsg, strlen(connectionsMsg)+1, 0);
+            connectionsMsg[0] = '\0'; 
+        } 
     }
+}
+
+int checkMessage(struct user* user, char* message){
+    if(strcmp(message, "$users") == 0){
+        char usersList[100];
+        strcpy(usersList, "Users online: ");
+        for(int i = 0; i < connectionsMade; i++){
+            strcat(usersList, users[i]->username);
+            if(i != connectionsMade - 1)
+                strcat(usersList, ", ");
+        }
+        printf("%s\n", usersList);
+        int charsWritten = send(user->userSocket, "$", 2, 0);
+        charsWritten = send(user->userSocket, usersList, strlen(usersList)+1, 0);
+        return 1;
+    }
+    return 0;
 }
 
 void* connection(void* arg){
@@ -57,12 +93,16 @@ void* connection(void* arg){
         if(strcmp(message, "exit()") != 0){
             printf("%s: %s\n", user->username, message);
         }
-        strcpy(packaging, user->username);
-        strcat(packaging, ": ");
-        strcat(packaging, message);
-        for(int i = 0; i < connectionsMade; i++){
-            charsWritten = send(users[i]->userSocket, packaging, strlen(packaging)+1, 0);
-        }                                           
+        if(checkMessage(user, message) == 0){
+            strcpy(packaging, user->username);
+            strcat(packaging, ": ");
+            strcat(packaging, message);
+            for(int i = 0; i < connectionsMade; i++){
+                if(i == user->userNo)
+                    charsWritten = send(user->userSocket, ".", 2, 0);
+                charsWritten = send(users[i]->userSocket, packaging, strlen(packaging)+1, 0);
+            }     
+        }                                      
     } while(strcmp(message, "exit()") != 0);
 
     printf("%s has left.\n", user->username); 
