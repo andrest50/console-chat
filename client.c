@@ -19,7 +19,7 @@ void setupAddressStruct(struct sockaddr_in*, int, char*);
 void getUserName(char*);
 int checkMessage(int, char*);
 void getMessage(char*, char*, int);
-void receivedMessage(char*, char*);
+void receivedMessage(char*, char, char*);
 void returnMessage(int, char*);
 void sendMessage(int, char*);
 
@@ -40,6 +40,7 @@ void setupAddressStruct(struct sockaddr_in* address, int portNumber, char* hostn
 }
 
 void getUserName(char* username){
+    //get username until it is valid
     do {
         printf("Enter a username: ");
         scanf("%s", username);
@@ -48,22 +49,23 @@ void getUserName(char* username){
 }
 
 int checkMessage(int socketFD, char* buffer){
+    //if user is sending a file
     if(strstr(buffer, "$file")){
-        char content[10000];
-        char file[20];       
+        char content[10000]; //contains file content
+        char file[20]; //contains file name
         strcpy(file, strtok(buffer, " "));
-        strcpy(file, strtok(NULL, " "));
-        //printf("%s\n", file);
+        strcpy(file, strtok(NULL, " ")); //get file name as second argument to $file
+
+        //if file was specified        
         if(file != NULL){
-            int errNo = 0;
+            int errNo = 0; //indicates errors
             int* errPtr = &errNo;
-            strcpy(content, getFileContents(file, content, errPtr));
+            strcpy(content, getFileContents(file, content, errPtr)); //get file content
             if(errNo == 0){
                 printf("%s\n", content);
             }
-            char one = '1';
-            strncat(content, &one, 1);
-            int charsWritten = send(socketFD, content, strlen(content)+1, 0);
+            content[strlen(content)] = '1'; //append the content
+            int charsWritten = send(socketFD, content, strlen(content), 0); //send to server
         }
         return 1;
     }
@@ -71,22 +73,29 @@ int checkMessage(int socketFD, char* buffer){
 }
 
 void getMessage(char* buffer, char* username, int messagesSent){
-    buffer[0] = '\0';
-    //printf("%s: ", username);
+    buffer[0] = '\0'; //clear buffer
+
+    //if first message, use extra fgets to avoid blank line
     if(messagesSent == 0)
         fgets(buffer, 256, stdin);
-    fgets(buffer, 256, stdin);
-    buffer[strlen(buffer)-1] = '\0';
+
+    fgets(buffer, 256, stdin); //get user input
+    buffer[strlen(buffer)-1] = '\0'; //remove newline
 }
 
-void receivedMessage(char* readBuffer, char* username){
-    if(!strstr(readBuffer, username)){
+void receivedMessage(char* readBuffer, char context, char* username){
+
+    //if message is to be displayed
+    if(context != '.'){
+
+        //if message is someone leaving chat
         if(strstr(readBuffer, "exit()")){
             char userWhoLeft[20];
             strcpy(userWhoLeft, strtok(readBuffer, ":"));
             printf("%s left.\n", userWhoLeft);
         }
         else {
+            //if there is user input
             if ((fseek(stdin, 0, SEEK_END), ftell(stdin)) > 0){
                 fprintf(stdout, "\n%s\n", readBuffer);
             }
@@ -95,29 +104,31 @@ void receivedMessage(char* readBuffer, char* username){
                 fflush(stdout);
             }
         }
-        //printf("%s: ", username);
-        readBuffer[0] = '\0';
+    }
+    readBuffer[0] = '\0'; //clear message
+}
+
+void returnMessage(int socketFD, char* message){
+    int charsRead = recv(socketFD, message, 256, 0); //receive a response from server
+    
+    //if context is $ then print response (e.g. $port, $users)
+    if(message[charsRead-1] == '$'){
+        message[charsRead-1] = '\0';
+        printf("%s\n", message);
     }
 }
 
-void returnMessage(int socketFD, char* buffer){
-    int charsRead = recv(socketFD, buffer, 256, 0);
-    if(buffer[charsRead-2] == '$'){
-        buffer[charsRead-2] = '\0';
-        printf("%s\n", buffer);
-    }
-    //buffer[0] = '\0';
-}
-
-void sendMessage(int socketFD, char* buffer){
+void sendMessage(int socketFD, char* message){
+    //print string length if on debug mode
     if(DEBUG == 1)
-        printf("buffer length: %ld\n", strlen(buffer));
+        printf("message length: %ld\n", strlen(message));
 
-    int charsWritten = send(socketFD, buffer, strlen(buffer)+1, 0);
-    buffer[0] = '\0';
+    int charsWritten = send(socketFD, message, strlen(message), 0); //send message to server
+    message[0] = '\0'; //clear message
 }
 
 int checkReceivedFileContent(){
+    //prompt user to display file content received
     printf("You received file content. Do you want to display it. (1) yes (2) no.\n");
     int resp;
     scanf("%d", &resp);
@@ -125,9 +136,11 @@ int checkReceivedFileContent(){
 }
 
 int main(int argc, char *argv[]) {
+    //variable declaration/initialization
     int socketFD, portNumber, port = PORT;
-    int charsWritten, charsRead, messagesSent = 0, accept;
+    int charsWritten, charsRead, messagesSent = 0, accept, type;
     struct sockaddr_in serverAddress;
+    char username[20];
     char buffer[256];
     char readBuffer[256];
     char message[257];
@@ -148,9 +161,8 @@ int main(int argc, char *argv[]) {
     }
 
     setupAddressStruct(&serverAddress, port, "localhost");
-
-    char username[20];    
-    getUserName(username);
+    
+    getUserName(username); //get username
 
     if (connect(socketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0){
         perror("CLIENT: ERROR connecting");
@@ -159,7 +171,7 @@ int main(int argc, char *argv[]) {
 
     printf("Succesfully connected to server on port %d\n", port);
 
-    charsWritten = send(socketFD, username, strlen(username)+1, 0);
+    charsWritten = send(socketFD, username, strlen(username), 0); //send username to server
     if (charsWritten < 0){
         perror("CLIENT: ERROR writing to socket");
         exit(1);
@@ -174,37 +186,46 @@ int main(int argc, char *argv[]) {
         FD_ZERO(&rfds);
         FD_SET(0, &rfds);
         FD_SET(socketFD, &rfds);
+
+        //use select for i/o multiplexing -- allowing input from socket and stdin somewhat concurrently
         if(select(socketFD + 1, &rfds, NULL, NULL, NULL) == -1){
             perror("select()");
             exit(1);
         }
+        buffer[0] = '\0';
+        message[0] = '\0';
+        readBuffer[0] = '\0';
+        //if there is user input in stdin
         if(FD_ISSET(0, &rfds)){
-            //printf("here2\n");
-            getMessage(buffer, username, messagesSent);
-            int type = checkMessage(socketFD, buffer);
-            sprintf(message, "%s%d", buffer, type);
+            getMessage(buffer, username, messagesSent); //get message
+            type = checkMessage(socketFD, buffer); //check message for commands
+            sprintf(message, "%s%d", buffer, type); //combine message + context
+
+            //if message is to be sent to server
             if(type == 0){
-                sendMessage(socketFD, message);
-                returnMessage(socketFD, message);
+                sendMessage(socketFD, message); //send message to server
+                returnMessage(socketFD, message); //return response from server
             }  
             messagesSent++;
         }
+        //if there is a message from socket
         if(FD_ISSET(socketFD, &rfds)){
-            //printf("here\n");
             accept = 1;
-            //printf("%s\n", context);
-            charsRead = read(socketFD, readBuffer, 256);
-            //printf("%s\n", readBuffer);
+            charsRead = read(socketFD, readBuffer, 256); //read from socket
             if(charsRead == -1){
                 perror("read()");
                 exit(1);
             }
-            context = readBuffer[charsRead-2];
-            if(context == 49) //1
-                accept = checkReceivedFileContent();
-            readBuffer[charsRead-2] = '\0';
+            context = readBuffer[charsRead-1]; //store context
+
+            //check if context is a 1 to prompt for response
+            if(context == 49) 
+                accept = checkReceivedFileContent(); //user decides to accept content
+            readBuffer[charsRead-1] = '\0';
+            
+            //if user allows content to be displayed
             if(accept == 1)
-                receivedMessage(readBuffer, username);
+                receivedMessage(readBuffer, context, username);
         }
 
     } while(!strstr(buffer, "exit()"));
