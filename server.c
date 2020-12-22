@@ -11,6 +11,7 @@
 
 //global variables
 pthread_t threads[5];
+//struct user* users = NULL;
 struct user* users[5];
 int connectionsMade = 0;
 int port;
@@ -20,6 +21,7 @@ struct user {
     int userNo;
     char username[20];
     int userSocket;
+    //struct user* next;
 };
 
 //function prototypes
@@ -161,7 +163,8 @@ void* connection(void* arg){
         }                                      
     } while(strcmp(message, "exit()") != 0);
 
-    printf("%s has left.\n", user->username); 
+    printf("%s has left.\n", user->username);
+    connectionsMade--; 
     close(user->userSocket);
 }
 

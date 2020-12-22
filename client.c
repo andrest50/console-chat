@@ -131,7 +131,8 @@ int checkReceivedFileContent(){
     //prompt user to display file content received
     printf("You received file content. Do you want to display it. (1) yes (2) no.\n");
     int resp;
-    scanf("%d", &resp);
+    scanf("%d%*c", &resp); //get integer & throw out newline
+    //fflush(stdout);
     return resp;
 }
 
@@ -192,9 +193,6 @@ int main(int argc, char *argv[]) {
             perror("select()");
             exit(1);
         }
-        buffer[0] = '\0';
-        message[0] = '\0';
-        readBuffer[0] = '\0';
         //if there is user input in stdin
         if(FD_ISSET(0, &rfds)){
             getMessage(buffer, username, messagesSent); //get message
@@ -230,7 +228,23 @@ int main(int argc, char *argv[]) {
 
     } while(!strstr(buffer, "exit()"));
 
-    /*pid_t spawnid;
+    close(socketFD); 
+
+    return 0;
+}
+
+//For larger messages
+
+/*while(totalCharsWritten < strlen(buffer)){
+        charsWritten = send(socketFD, buffer + totalCharsWritten, strlen(buffer), 0);
+        printf("chars written: %d\n", charsWritten);
+        totalCharsWritten += charsWritten;
+}*/
+//charsWritten = send(socketFD, "@@", 3, 0);
+
+//Previous code using processes
+
+ /*pid_t spawnid;
     spawnid = fork();
     switch(spawnid){
         case -1:
@@ -270,16 +284,3 @@ int main(int argc, char *argv[]) {
             kill(childPid, SIGKILL);
             break;
     }*/
-    close(socketFD); 
-
-    return 0;
-}
-
-//For larger messages
-
-/*while(totalCharsWritten < strlen(buffer)){
-        charsWritten = send(socketFD, buffer + totalCharsWritten, strlen(buffer), 0);
-        printf("chars written: %d\n", charsWritten);
-        totalCharsWritten += charsWritten;
-}*/
-//charsWritten = send(socketFD, "@@", 3, 0);
