@@ -8,10 +8,20 @@
 #include <sys/wait.h>
 #include <signal.h>    
 #include <poll.h>
-#include <sys/select.h> 
+#include <sys/select.h>
+#include "commands.h"
 
 #define PORT 52500
 #define DEBUG 0
+
+//function prototypes
+void setupAddressStruct(struct sockaddr_in*, int, char*);
+void getUserName(char*);
+int checkMessage(char*);
+void getMessage(char*, char*, int);
+void receivedMessage(char*, char*);
+void returnMessage(int, char*);
+void sendMessage(int, char*);
 
 void setupAddressStruct(struct sockaddr_in* address, int portNumber, char* hostname){
  
@@ -37,9 +47,24 @@ void getUserName(char* username){
     printf("Username set to %s\n", username);
 }
 
-void checkMessage(char* buffer){
-    //if(strcmp(buffer, "$users")){       
-    //}
+int checkMessage(char* buffer){
+    if(strstr(buffer, "$file")){
+        char content[10000];
+        char file[20];       
+        strcpy(file, strtok(buffer, " "));
+        strcpy(file, strtok(NULL, " "));
+        printf("%s\n", file);
+        if(file != NULL){
+            int errNo = 0;
+            int* errPtr = &errNo;
+            strcpy(content, getFileContents(file, content, errPtr));
+            if(errNo == 0){
+                printf("%s\n", content);
+            }
+        }
+        return 1;
+    }
+    return 0;
 }
 
 void getMessage(char* buffer, char* username, int messagesSent){
@@ -48,11 +73,10 @@ void getMessage(char* buffer, char* username, int messagesSent){
     if(messagesSent == 0)
         fgets(buffer, 256, stdin);
     fgets(buffer, 256, stdin);
-    //printf("here2\n");
     buffer[strlen(buffer)-1] = '\0';
 }
 
-void receivedMessage(char* readBuffer, char* buffer, char* username){
+void receivedMessage(char* readBuffer, char* username){
      if(!strstr(readBuffer, username)){
         if(strstr(readBuffer, "exit()")){
             char userWhoLeft[20];
@@ -79,7 +103,7 @@ void returnMessage(int socketFD, char* buffer){
     charsRead = recv(socketFD, buffer, 256, 0);
     if(strcmp(preMessage, "$") == 0)
         printf("%s\n", buffer);
-    buffer[0] = '\0';
+    //buffer[0] = '\0';
 }
 
 void sendMessage(int socketFD, char* buffer){
@@ -144,10 +168,10 @@ int main(int argc, char *argv[]) {
         if(FD_ISSET(0, &rfds)){
             //printf("here2\n");
             getMessage(buffer, username, messagesSent);
-            checkMessage(buffer);
-            sendMessage(socketFD, buffer);
-            returnMessage(socketFD, buffer);
-            
+            if(checkMessage(buffer) == 0){
+                sendMessage(socketFD, buffer);
+                returnMessage(socketFD, buffer);
+            }  
             messagesSent++;
         }
         if(FD_ISSET(socketFD, &rfds)){
@@ -157,7 +181,7 @@ int main(int argc, char *argv[]) {
                 perror("read()");
                 exit(1);
             }
-            receivedMessage(readBuffer, buffer, username);
+            receivedMessage(readBuffer, username);
         }
 
     } while(!strstr(buffer, "exit()"));

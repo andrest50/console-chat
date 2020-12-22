@@ -13,12 +13,21 @@
 pthread_t threads[5];
 struct user* users[5];
 int connectionsMade = 0;
+int port;
 
 struct user {
     int userNo;
     char username[20];
     int userSocket;
 };
+
+//function prototypes
+void setupAddressStruct(struct sockaddr_in*, int);
+void displayConnected(struct user*);
+int checkMessage(struct user*, char*);
+void* connection(void*);
+int sendUsersOnline(struct user*, char*);
+int sendPortNumber(struct user*);
 
 void setupAddressStruct(struct sockaddr_in* address, int portNumber){
  
@@ -36,6 +45,7 @@ void displayConnected(struct user* user){
     printf("%s connected.\n", user->username);
     sprintf(connectionsMsg, "Users connected: %d", connectionsMade);
     printf("%s\n", connectionsMsg);
+    charsWritten = send(user->userSocket, connectionsMsg, strlen(connectionsMsg)+1, 0);
     for(int i = 0; i < connectionsMade; i++){
         printf("%s is online.\n", users[i]->username);
         for(int j = 0; j < connectionsMade; j++){
@@ -50,26 +60,41 @@ void displayConnected(struct user* user){
             charsWritten = send(users[j]->userSocket, joinMsg, strlen(joinMsg)+1, 0);
             joinMsg[0] = '\0';  
         }
-        if(i == user->userNo){
-            charsWritten = send(users[i]->userSocket, connectionsMsg, strlen(connectionsMsg)+1, 0);
-            connectionsMsg[0] = '\0'; 
-        } 
     }
+}
+
+int sendUsersOnline(struct user* user, char* message){
+    char usersList[100];
+    char usersHeader[20];
+
+    sprintf(usersHeader, "Users online (%d): ", connectionsMade);
+    strcpy(usersList, usersHeader);
+    for(int i = 0; i < connectionsMade; i++){
+        strcat(usersList, users[i]->username);
+        if(i != connectionsMade - 1)
+            strcat(usersList, ", ");
+    }
+    printf("%s\n", usersList);
+    int charsWritten = send(user->userSocket, "$", 2, 0);
+    charsWritten = send(user->userSocket, usersList, strlen(usersList)+1, 0);
+    return 1;
+}
+
+int sendPortNumber(struct user* user){
+    char portString[15];
+    sprintf(portString, "%d", port);
+    printf("Port: %s\n", portString);
+    int charsWritten = send(user->userSocket, "$", 2, 0);
+    charsWritten = send(user->userSocket, portString, strlen(portString)+1, 0);
+    return 2;
 }
 
 int checkMessage(struct user* user, char* message){
     if(strcmp(message, "$users") == 0){
-        char usersList[100];
-        strcpy(usersList, "Users online: ");
-        for(int i = 0; i < connectionsMade; i++){
-            strcat(usersList, users[i]->username);
-            if(i != connectionsMade - 1)
-                strcat(usersList, ", ");
-        }
-        printf("%s\n", usersList);
-        int charsWritten = send(user->userSocket, "$", 2, 0);
-        charsWritten = send(user->userSocket, usersList, strlen(usersList)+1, 0);
-        return 1;
+        return sendUsersOnline(user, message);
+    }
+    if(strcmp(message, "$port") == 0){
+        return sendPortNumber(user);
     }
     return 0;
 }
@@ -124,7 +149,8 @@ int main(int argc, char* argv[]){
         perror("ERROR opening socket");
     }
 
-    setupAddressStruct(&serverAddress, atoi(argv[1]));
+    port = atoi(argv[1]);
+    setupAddressStruct(&serverAddress, port);
 
     if (bind(listenSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0){
         perror("ERROR on binding");
