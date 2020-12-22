@@ -17,7 +17,7 @@
 //function prototypes
 void setupAddressStruct(struct sockaddr_in*, int, char*);
 void getUserName(char*);
-int checkMessage(char*);
+int checkMessage(int, char*);
 void getMessage(char*, char*, int);
 void receivedMessage(char*, char*);
 void returnMessage(int, char*);
@@ -47,13 +47,13 @@ void getUserName(char* username){
     printf("Username set to %s\n", username);
 }
 
-int checkMessage(char* buffer){
+int checkMessage(int socketFD, char* buffer){
     if(strstr(buffer, "$file")){
         char content[10000];
         char file[20];       
         strcpy(file, strtok(buffer, " "));
         strcpy(file, strtok(NULL, " "));
-        printf("%s\n", file);
+        //printf("%s\n", file);
         if(file != NULL){
             int errNo = 0;
             int* errPtr = &errNo;
@@ -61,6 +61,9 @@ int checkMessage(char* buffer){
             if(errNo == 0){
                 printf("%s\n", content);
             }
+            char one = '1';
+            strncat(content, &one, 1);
+            int charsWritten = send(socketFD, content, strlen(content)+1, 0);
         }
         return 1;
     }
@@ -77,7 +80,7 @@ void getMessage(char* buffer, char* username, int messagesSent){
 }
 
 void receivedMessage(char* readBuffer, char* username){
-     if(!strstr(readBuffer, username)){
+    if(!strstr(readBuffer, username)){
         if(strstr(readBuffer, "exit()")){
             char userWhoLeft[20];
             strcpy(userWhoLeft, strtok(readBuffer, ":"));
@@ -98,27 +101,37 @@ void receivedMessage(char* readBuffer, char* username){
 }
 
 void returnMessage(int socketFD, char* buffer){
-    char preMessage[5];
-    int charsRead = recv(socketFD, preMessage, 2, 0);
-    charsRead = recv(socketFD, buffer, 256, 0);
-    if(strcmp(preMessage, "$") == 0)
+    int charsRead = recv(socketFD, buffer, 256, 0);
+    if(buffer[charsRead-2] == '$'){
+        buffer[charsRead-2] = '\0';
         printf("%s\n", buffer);
+    }
     //buffer[0] = '\0';
 }
 
 void sendMessage(int socketFD, char* buffer){
     if(DEBUG == 1)
         printf("buffer length: %ld\n", strlen(buffer));
+
     int charsWritten = send(socketFD, buffer, strlen(buffer)+1, 0);
     buffer[0] = '\0';
 }
 
+int checkReceivedFileContent(){
+    printf("You received file content. Do you want to display it. (1) yes (2) no.\n");
+    int resp;
+    scanf("%d", &resp);
+    return resp;
+}
+
 int main(int argc, char *argv[]) {
     int socketFD, portNumber, port = PORT;
-    int charsWritten, charsRead, messagesSent = 0;
+    int charsWritten, charsRead, messagesSent = 0, accept;
     struct sockaddr_in serverAddress;
     char buffer[256];
     char readBuffer[256];
+    char message[257];
+    char context;
 
     if (argc < 2) { 
         fprintf(stderr,"USAGE: %s port\n", argv[0]); 
@@ -168,20 +181,30 @@ int main(int argc, char *argv[]) {
         if(FD_ISSET(0, &rfds)){
             //printf("here2\n");
             getMessage(buffer, username, messagesSent);
-            if(checkMessage(buffer) == 0){
-                sendMessage(socketFD, buffer);
-                returnMessage(socketFD, buffer);
+            int type = checkMessage(socketFD, buffer);
+            sprintf(message, "%s%d", buffer, type);
+            if(type == 0){
+                sendMessage(socketFD, message);
+                returnMessage(socketFD, message);
             }  
             messagesSent++;
         }
         if(FD_ISSET(socketFD, &rfds)){
             //printf("here\n");
+            accept = 1;
+            //printf("%s\n", context);
             charsRead = read(socketFD, readBuffer, 256);
+            //printf("%s\n", readBuffer);
             if(charsRead == -1){
                 perror("read()");
                 exit(1);
             }
-            receivedMessage(readBuffer, username);
+            context = readBuffer[charsRead-2];
+            if(context == 49) //1
+                accept = checkReceivedFileContent();
+            readBuffer[charsRead-2] = '\0';
+            if(accept == 1)
+                receivedMessage(readBuffer, username);
         }
 
     } while(!strstr(buffer, "exit()"));
