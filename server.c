@@ -13,7 +13,6 @@
 //pthread_t threads[5];
 struct user* users = NULL; //linked list of all users
 struct user* head = NULL; //pointer to head of linked list
-//struct user* users[5];
 int connectionsMade = 0, totalConnections = 0;
 int port;
 
@@ -74,8 +73,8 @@ void displayConnected(struct user* user){
     charsWritten = send(user->userSocket, connectionsMsg, strlen(connectionsMsg), 0); //send connection message
 
     //send who is online/joined to every user
-    //traverse();
-    //printf("%s\n", localHead->username);
+    traverse();
+    printf("%s\n", localHead->username);
     for(int i = 0; i < connectionsMade; i++){
         printf("%s is online.\n", localHead->username);
         localHead2 = head;
@@ -83,7 +82,7 @@ void displayConnected(struct user* user){
         for(int j = 0; j < connectionsMade; j++){
             strcpy(joinMsg, localHead->username); //add username to message
 
-            //printf("localHead: %d, localHead2: %d, user: %d\n", localHead->userNo, localHead2->userNo, user->userNo);
+            printf("localHead: %d, localHead2: %d, user: %d\n", localHead->userNo, localHead2->userNo, user->userNo);
             //if user is the one who connected show who is online
             if(localHead2->userNo == localHead->userNo){
                 strcat(joinMsg, " is online..");
@@ -91,8 +90,11 @@ void displayConnected(struct user* user){
             else if(user->userNo == localHead->userNo){
                 strcat(joinMsg, " has joined.0");
             }
-            else {
+            else if(user->userNo == localHead2->userNo) {
                 strcat(joinMsg, " is online.0");
+            }
+            else {
+                strcat(joinMsg, "."); //don't display
             }
             //printf("here\n");
             charsWritten = send(localHead2->userSocket, joinMsg, strlen(joinMsg), 0); //send user online/joined message
@@ -126,9 +128,23 @@ int sendUsersOnline(struct user* user, char* message){
 
 int sendPortNumber(struct user* user){
     char portString[15];
-    sprintf(portString, "%d$", port); //craft message
+    sprintf(portString, "Port: %d$", port); //craft message
     int charsWritten = send(user->userSocket, portString, strlen(portString), 0); //send message to client
     return 2;
+}
+
+int sendFileDescriptor(struct user* user){
+    char fdString[15];
+    sprintf(fdString, "Fd: %d$", user->userSocket);
+    int charsWritten = send(user->userSocket, fdString, strlen(fdString), 0);
+    return 3;
+}
+
+int sendUserNumber(struct user* user){
+    char numberString[15];
+    sprintf(numberString, "Number: %d$", user->userNo);
+    int charsWritten = send(user->userSocket, numberString, strlen(numberString), 0);
+    return 4;
 }
 
 int checkMessage(struct user* user, char* message){
@@ -139,6 +155,12 @@ int checkMessage(struct user* user, char* message){
     //check for port command
     if(strcmp(message, "$port") == 0){
         return sendPortNumber(user);
+    }
+    if(strcmp(message, "$fd") == 0){
+        return sendFileDescriptor(user);
+    }
+    if(strcmp(message, "$number") == 0){
+        return sendUserNumber(user);
     }
     return 0;
 }
