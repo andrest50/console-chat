@@ -9,7 +9,8 @@
 #include <signal.h>
 #include <pthread.h>
 
-#define EXIT "exit()"
+#define EXIT "$e"
+#define DEBUG 1
 
 //global variables
 struct user* users = NULL; //linked list of all users
@@ -35,7 +36,7 @@ int sendUsersOnline(struct user*, char*);
 int sendPortNumber(struct user*);
 void addUser(int);
 void setupUser(struct user*, int);
-void traverse();
+void debugInfo();
 char* setupConnectionsMsg(struct user*, char*);
 char* sendUsersMsg(struct user*);
 int sendFileDescriptor(struct user*);
@@ -50,20 +51,6 @@ void setupAddressStruct(struct sockaddr_in* address, int portNumber){
   address->sin_family = AF_INET;
   address->sin_port = htons(portNumber);
   address->sin_addr.s_addr = INADDR_ANY;
-}
-
-void traverse(){
-    struct user* localHead = head;
-    int count = 1;
-    while(localHead != NULL){
-        printf("-------------------------------------");
-        printf("Node %d\n", count);
-        printf("username: %s\n", localHead->username);
-        printf("number: %d\n", localHead->userNo);
-        printf("socket: %d\n", localHead->userSocket);
-        localHead = localHead->next;
-        count++;
-    }
 }
 
 char* setupConnectionsMsg(struct user* user, char* connectionsMsg){
@@ -173,6 +160,22 @@ int sendUserNumber(struct user* user){
     return 4;
 }
 
+void debugInfo(){
+    struct user* localHead = head;
+    int count = 1;
+    while(localHead != NULL){
+        printf("-------------------------------------\n");
+        printf("==Node %d==\n", count);
+        printf("username: %s\n", localHead->username);
+        printf("number: %d\n", localHead->userNo);
+        printf("socket: %d\n", localHead->userSocket);
+        printf("thread: %ld\n", pthread_self());
+        localHead = localHead->next;
+        count++;
+    }
+    printf("-------------------------------------\n");
+}
+
 /*Check messages for a command starting with $*/
 int checkMessage(struct user* user, char* message){
     if(strcmp(message, "$users") == 0){
@@ -195,8 +198,6 @@ void removeUser(struct user* user){
     struct user* localHead = head;
     struct user* prev = head;
 
-    usersOnline--; //decrease number of users online
-
     //if node to delete is head node
     if(localHead != NULL && localHead->userNo == user->userNo){
         head = localHead->next;
@@ -217,7 +218,7 @@ void removeUser(struct user* user){
     //skip the node to delete (break from link)
     prev->next = localHead->next;
 
-    //traverse();
+    //debugInfo();
     free(localHead);
 }
 
@@ -250,7 +251,8 @@ void sendMessage(struct user* user, char* message, char context){
 
 void disconnect(struct user* user){
     printf("%s has left.\n", user->username);
-    removeUser(user);
+    removeUser(user); //remove user from linked list
+    usersOnline--; //decrease number of users online
     close(user->userSocket);
 }
 
