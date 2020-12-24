@@ -11,8 +11,9 @@
 #include <sys/select.h>
 #include "commands.h"
 
-#define PORT 52500
+#define PORT 52500 //default port
 #define DEBUG 0
+#define EXIT "exit()"
 
 //function prototypes
 void setupAddressStruct(struct sockaddr_in*, int, char*);
@@ -89,7 +90,7 @@ void receivedMessage(char* readBuffer, char context, char* username){
     if(context != '.'){
 
         //if message is someone leaving chat
-        if(strstr(readBuffer, "exit()")){
+        if(strstr(readBuffer, EXIT)){
             char userWhoLeft[20];
             strcpy(userWhoLeft, strtok(readBuffer, ":"));
             printf("%s left.\n", userWhoLeft);
@@ -150,11 +151,9 @@ int main(int argc, char *argv[]) {
 
     if (argc < 2) { 
         fprintf(stderr,"USAGE: %s port\n", argv[0]); 
-        exit(0); 
+        exit(1); 
     }
-    if(argc > 2){
-        port = atoi(argv[1]);
-    }
+    port = atoi(argv[1]);
 
     socketFD = socket(AF_INET, SOCK_STREAM, 0); 
     if (socketFD < 0){
@@ -183,8 +182,7 @@ int main(int argc, char *argv[]) {
     //use select() for multiplexing, listening to stdin and socket
     fd_set rfds;
     
-    //loop
-
+    //loop until user leaves
     do {
         FD_ZERO(&rfds);
         FD_SET(0, &rfds);
@@ -228,7 +226,7 @@ int main(int argc, char *argv[]) {
                 receivedMessage(readBuffer, context, username);
         }
 
-    } while(!strstr(buffer, "exit()"));
+    } while(!strstr(buffer, EXIT));
 
     close(socketFD); 
 
