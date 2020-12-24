@@ -43,11 +43,26 @@ void setupAddressStruct(struct sockaddr_in* address, int portNumber){
   address->sin_addr.s_addr = INADDR_ANY;
 }
 
+void traverse(){
+    struct user* localHead = head;
+    int count = 1;
+    while(localHead != NULL){
+        printf("-------------------------------------");
+        printf("Node %d\n", count);
+        printf("username: %s\n", localHead->username);
+        printf("number: %d\n", localHead->userNo);
+        printf("socket: %d\n", localHead->userSocket);
+        localHead = localHead->next;
+        count++;
+    }
+}
+
 void displayConnected(struct user* user){
     int charsWritten;
     char joinMsg[30];
     char connectionsMsg[20];
     struct user* localHead = head;
+    struct user* localHead2 = head;
     //printf("%s\n", localHead->username);
 
     //set up connection message
@@ -59,23 +74,27 @@ void displayConnected(struct user* user){
     charsWritten = send(user->userSocket, connectionsMsg, strlen(connectionsMsg), 0); //send connection message
 
     //send who is online/joined to every user
+    //traverse();
+    //printf("%s\n", localHead->username);
     for(int i = 0; i < connectionsMade; i++){
         printf("%s is online.\n", localHead->username);
-        struct user* localHead2 = head;
+        localHead2 = head;
         //loop through connected users
         for(int j = 0; j < connectionsMade; j++){
             strcpy(joinMsg, localHead->username); //add username to message
 
+            //printf("localHead: %d, localHead2: %d, user: %d\n", localHead->userNo, localHead2->userNo, user->userNo);
             //if user is the one who connected show who is online
-            if(localHead->userNo == j){
+            if(localHead2->userNo == localHead->userNo){
                 strcat(joinMsg, " is online..");
             }
-            else if(user->userNo == j){
-                strcat(joinMsg, " is online.0");
-            }
-            else {
+            else if(user->userNo == localHead->userNo){
                 strcat(joinMsg, " has joined.0");
             }
+            else {
+                strcat(joinMsg, " is online.0");
+            }
+            //printf("here\n");
             charsWritten = send(localHead2->userSocket, joinMsg, strlen(joinMsg), 0); //send user online/joined message
             joinMsg[0] = '\0'; //clear message
             localHead2 = localHead2->next;  
@@ -126,7 +145,7 @@ int checkMessage(struct user* user, char* message){
 
 void disconnect(struct user* user){
     struct user* localHead = head;
-    struct user* prev;
+    struct user* prev = head;
 
     connectionsMade--; 
 
@@ -146,6 +165,7 @@ void disconnect(struct user* user){
 
     prev->next = localHead->next;
 
+    //traverse();
     free(localHead);
 }
 
@@ -160,6 +180,8 @@ void* connection(void* arg){
 
     //read username
     charsRead = recv(user->userSocket, user->username, 20, 0);
+    //printf("%s\n", user->username);
+    //traverse();
     printf("Connected with socket fd: %d\n", user->userSocket);
     displayConnected(user);
 
@@ -217,8 +239,8 @@ void setupLinkedList(int connectionSocket){
         users->userNo = totalConnections;
         users->next = NULL;
         head = users; //set head as first user
-        printf("%d\n", users->userNo);
-        printf("%d\n", head->userNo);
+        //printf("%d\n", users->userNo);
+        //printf("%d\n", head->userNo);
     }
     //add another user to te linked list
     else {
@@ -231,9 +253,14 @@ void setupLinkedList(int connectionSocket){
             printf("%d\n", users->userNo);
         }
         else {
+            users = head;
+            while(users->next != NULL){
+                users = users->next;
+            }
+            //printf("%s\n", users->username);
             users->next = newUser;
             users = users->next; //point to next user
-            printf("%d\n", users->userNo);
+            //printf("%s\n", users->username);
         }
     }   
 }

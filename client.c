@@ -137,6 +137,7 @@ int checkReceivedFileContent(){
 }
 
 int main(int argc, char *argv[]) {
+
     //variable declaration/initialization
     int socketFD, portNumber, port = PORT;
     int charsWritten, charsRead, messagesSent = 0, accept, type;
@@ -172,7 +173,8 @@ int main(int argc, char *argv[]) {
 
     printf("Succesfully connected to server on port %d\n", port);
 
-    charsWritten = send(socketFD, username, strlen(username), 0); //send username to server
+    //printf("[%ld] %s\n", strlen(username), username);
+    charsWritten = send(socketFD, username, strlen(username)+1, 0); //send username to server
     if (charsWritten < 0){
         perror("CLIENT: ERROR writing to socket");
         exit(1);
