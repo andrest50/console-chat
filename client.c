@@ -56,6 +56,7 @@ void getUserName(char* username){
 }
 
 int checkMessage(char* buffer){
+    int charsWritten = 0;
 
     //if user is sending a file
     if(strstr(buffer, "$file")){
@@ -69,13 +70,32 @@ int checkMessage(char* buffer){
             int errNo = 0; //indicates errors
             int* errPtr = &errNo;
             strcpy(content, getFileContents(file, content, errPtr)); //get file content
-            if(errNo == 0){
-                printf("%s\n", content);
-            }
             content[strlen(content)] = '1'; //append the content
-            int charsWritten = send(socketFD, content, strlen(content), 0); //send to server
+            if(errNo == 0 && strlen(content) < 1000){
+                printf("%s\n", content);
+                charsWritten = send(socketFD, content, strlen(content), 0); //send to server
+            }
+            else
+                printf("File content is greater than 1000 bytes.\n");
         }
         return 1;
+    }
+    //print port number
+    if(strstr(buffer, "$port")){
+        printf("Port: %d\n", port);
+        return 2;    
+    }
+    //empty line
+    if(strcmp(buffer, "") == 0){
+        return 3;
+    }
+    if(strcmp(buffer, EXIT) == 0){
+        return 4;
+    }
+    //invalid command
+    if(buffer[0] == '$'){
+        printf("Invalid command.\n");
+        return 5;
     }
     return 0;
 }
@@ -85,9 +105,9 @@ void getMessage(char* buffer, char* username, int messagesSent){
 
     //if first message, use extra fgets to avoid blank line
     if(messagesSent == 0)
-        fgets(buffer, 256, stdin);
+        fgets(buffer, 1000, stdin);
 
-    fgets(buffer, 256, stdin); //get user input
+    fgets(buffer, 1000, stdin); //get user input
     buffer[strlen(buffer)-1] = '\0'; //remove newline
 }
 
@@ -117,7 +137,7 @@ void receivedMessage(char* readBuffer, char context, char* username){
 }
 
 void returnMessage(char* message){
-    int charsRead = recv(socketFD, message, 256, 0); //receive a response from server
+    int charsRead = recv(socketFD, message, 1000, 0); //receive a response from server
     
     //if context is $ then print response (e.g. $port, $users)
     if(message[charsRead-1] == '$'){
@@ -135,18 +155,19 @@ void sendMessage(char* message){
     message[0] = '\0'; //clear message
 }
 
+//prompt user to display file content received
 int checkReceivedFileContent(){
-    //prompt user to display file content received
     printf("You received file content. Do you want to display it. (1) yes (2) no.\n");
     int resp;
+    //*[^\n]
     scanf("%d%*c", &resp); //get integer & throw out newline
     //fflush(stdout);
     return resp;
 }
 
 int userInput(char* username, int* messagesSent){
-    char buffer[256];
-    char message[257];
+    char buffer[1000];
+    char message[1001];
 
     getMessage(buffer, username, *messagesSent); //get message
     int type = checkMessage(buffer); //check message for commands
@@ -164,10 +185,10 @@ int userInput(char* username, int* messagesSent){
 }
 
 void serverInput(char* username){
-    char readBuffer[256];
+    char readBuffer[1000];
     int accept = 1;
     
-    int charsRead = read(socketFD, readBuffer, 256); //read from socket
+    int charsRead = read(socketFD, readBuffer, 1000); //read from socket
     if(charsRead == -1){
         perror("read()");
         exit(1);

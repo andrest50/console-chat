@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <errno.h>
 #include "user.h"
 
 #define EXIT "$e"
@@ -24,7 +25,6 @@ void displayConnected(struct user*);
 int checkMessage(struct user*, char*);
 void* connection(void*);
 int sendUsersOnline(struct user*, char*);
-int sendPortNumber(struct user*);
 void debugInfo();
 char* setupConnectionsMsg(struct user*, char*);
 char* sendUsersMsg(struct user*);
@@ -124,14 +124,6 @@ int sendUsersOnline(struct user* user, char* message){
     return 1;
 }
 
-/*send port number message*/
-int sendPortNumber(struct user* user){
-    char portString[15];
-    sprintf(portString, "Port: %d$", port); //craft message
-    int charsWritten = send(user->userSocket, portString, strlen(portString), 0); //send message to client
-    return 2;
-}
-
 /*send file descriptor message*/
 int sendFileDescriptor(struct user* user){
     char fdString[15];
@@ -169,9 +161,6 @@ int checkMessage(struct user* user, char* message){
     if(strcmp(message, "$users") == 0){
         return sendUsersOnline(user, message);
     }
-    if(strcmp(message, "$port") == 0){
-        return sendPortNumber(user);
-    }
     if(strcmp(message, "$fd") == 0){
         return sendFileDescriptor(user);
     }
@@ -183,7 +172,7 @@ int checkMessage(struct user* user, char* message){
 
 void sendMessage(struct user* user, char* message, char context){
     struct user* localHead = head; //head of linked list
-    char packaging[256];
+    char packaging[1000];
     char dot = '.';
     int charsWritten;
 
@@ -221,7 +210,7 @@ void* connection(void* arg){
     struct user* user = arg; //user for this connection
     int charsRead = 0, charsWritten = 0;
     char context;
-    char message[256];
+    char message[1000];
 
     //read username
     charsRead = recv(user->userSocket, user->username, 20, 0);
@@ -229,7 +218,11 @@ void* connection(void* arg){
 
     //read messages and send to other users
     do {
-        charsRead = recv(user->userSocket, message, 256, 0); //get message
+        charsRead = recv(user->userSocket, message, 1000, 0); //get message
+        if(charsRead == 0 || errno == EINTR){
+            charsRead = 3;
+            strcpy(message, "$e0");
+        }
         context = message[charsRead-1]; //store context
         message[charsRead-1] = '\0'; //remove context from message
 
@@ -259,6 +252,8 @@ int main(int argc, char* argv[]){
     int connectionSocket;
     struct sockaddr_in serverAddress, clientAddress;
     socklen_t sizeOfClientInfo = sizeof(clientAddress);
+
+    //signal(SIGPIPE,SIG_IGN);
 
     if (argc < 2) { 
         fprintf(stderr,"USAGE: %s port\n", argv[0]); 
