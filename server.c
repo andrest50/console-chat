@@ -7,7 +7,7 @@
 #include <netinet/in.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include <pthread.h>
+#include "user.h"
 
 #define EXIT "$e"
 #define DEBUG 1
@@ -18,15 +18,6 @@ struct user* head = NULL; //pointer to head of linked list
 int usersOnline = 0, totalConnections = 0;
 int port;
 
-//user struct
-struct user {
-    int userNo;
-    char username[20];
-    int userSocket;
-    pthread_t thread;
-    struct user* next;
-};
-
 //function prototypes
 void setupAddressStruct(struct sockaddr_in*, int);
 void displayConnected(struct user*);
@@ -34,14 +25,11 @@ int checkMessage(struct user*, char*);
 void* connection(void*);
 int sendUsersOnline(struct user*, char*);
 int sendPortNumber(struct user*);
-void addUser(int);
-void setupUser(struct user*, int);
 void debugInfo();
 char* setupConnectionsMsg(struct user*, char*);
 char* sendUsersMsg(struct user*);
 int sendFileDescriptor(struct user*);
 int sendUserNumber(struct user*);
-void removeUser(struct user*);
 void disconnect(struct user*);
 void deconstructThreads();
 
@@ -193,35 +181,6 @@ int checkMessage(struct user* user, char* message){
     return 0;
 }
 
-/*Disconnect user by removing node from linked list*/
-void removeUser(struct user* user){
-    struct user* localHead = head;
-    struct user* prev = head;
-
-    //if node to delete is head node
-    if(localHead != NULL && localHead->userNo == user->userNo){
-        head = localHead->next;
-        free(localHead);
-        return;
-    }
-
-    //traverse until node to delete is found
-    while(localHead != NULL && localHead->userNo != user->userNo){
-        prev = localHead;
-        localHead = localHead->next;
-    }
-
-    //if node to delete doesn't exist
-    if(localHead == NULL) 
-        return;
-
-    //skip the node to delete (break from link)
-    prev->next = localHead->next;
-
-    //debugInfo();
-    free(localHead);
-}
-
 void sendMessage(struct user* user, char* message, char context){
     struct user* localHead = head; //head of linked list
     char packaging[256];
@@ -288,34 +247,6 @@ void* connection(void* arg){
     disconnect(user);
 }
 
-void setupUser(struct user* newUser, int connectionSocket){
-    newUser->userSocket = connectionSocket;
-    newUser->userNo = totalConnections;
-    newUser->next = NULL;
-}
-
-void addUser(int connectionSocket){
-
-    //initialize struct
-    struct user* newUser = (struct user*) malloc(sizeof(struct user));
-    setupUser(newUser, connectionSocket);
-
-    //if this is the first user initialize linked list
-    if(usersOnline == 0){
-        users = newUser;
-        head = users; //set head as first user
-    }
-    //add another user to te linked list
-    else {
-        users = head;
-        while(users->next != NULL){
-            users = users->next;
-        }
-        users->next = newUser;
-        users = users->next; //point to next user
-    }   
-}
-
 void deconstructThreads(){
     struct user* localHead = head;
     for(int i = 0; i < usersOnline; i++){
@@ -357,7 +288,7 @@ int main(int argc, char* argv[]){
         }
 
         //add user to linked list
-        addUser(connectionSocket);
+        addUser(connectionSocket, totalConnections);
 
         //create thread for client and server connection
         pthread_create(&users->thread, NULL, connection, (void*) users);
@@ -372,13 +303,3 @@ int main(int argc, char* argv[]){
 
     return 0;
 }
-
-//For larger messages
-
-/*while(strcmp(buffer, "@@") != 0){
-    buffer[0] = '\0';
-    charsRead = recv(connectionSocket, buffer, 256, 0);
-    if(strcmp(buffer, "@@") != 0){
-        strcat(fullBuffer, buffer);
-    }     
-}*/

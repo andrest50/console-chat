@@ -1,8 +1,14 @@
 CC=gcc
+OBJ=server.c client.c user.c commands.c
+EXE=server client
 
-make: server.c client.c
-	$(CC) -o server -pthread server.c
-	$(CC) -o client client.c commands.c
+all: $(EXE)
+
+server: $(OBJ)
+	$(CC) -o $@ -pthread server.c user.c
+	
+client: $(OBJ)
+	$(CC) -o $@ client.c commands.c
 
 clean:
-	rm -f server client
+	rm -f *.o $(EXE)
