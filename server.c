@@ -12,26 +12,28 @@
 
 #define EXIT "$e"
 #define DEBUG 1
+#define PORT 52500
 
 //global variables
-struct user* users = NULL; //linked list of all users
-struct user* head = NULL; //pointer to head of linked list
+User* users = NULL; //linked list of all users
+User* head = NULL; //pointer to head of linked list
 int usersOnline = 0, totalConnections = 0;
-int port;
+int port = PORT;
 
 //function prototypes
 void setupAddressStruct(struct sockaddr_in*, int);
-void displayConnected(struct user*);
-int checkMessage(struct user*, char*);
+void displayConnected(User*);
+int checkMessage(User*, char*);
 void* connection(void*);
-int sendUsersOnline(struct user*, char*);
+int sendUsersOnline(User*, char*);
 void debugInfo();
-char* setupConnectionsMsg(struct user*, char*);
-char* sendUsersMsg(struct user*);
-int sendFileDescriptor(struct user*);
-int sendUserNumber(struct user*);
-void disconnect(struct user*);
+char* setupConnectionsMsg(User*, char*);
+char* sendUsersMsg(User*);
+int sendFileDescriptor(User*);
+int sendUserNumber(User*);
+void disconnect(User*);
 void deconstructThreads();
+int sendPrivateMessage(User*, char*);
 
 //set up address struct
 void setupAddressStruct(struct sockaddr_in* address, int portNumber){
@@ -41,7 +43,7 @@ void setupAddressStruct(struct sockaddr_in* address, int portNumber){
   address->sin_addr.s_addr = INADDR_ANY;
 }
 
-char* setupConnectionsMsg(struct user* user, char* connectionsMsg){
+char* setupConnectionsMsg(User* user, char* connectionsMsg){
     printf("%s connected with socket fd: %d\n", user->username, user->userSocket);
     sprintf(connectionsMsg, "Users connected: %d", usersOnline);
     printf("%s\n", connectionsMsg);
@@ -49,9 +51,9 @@ char* setupConnectionsMsg(struct user* user, char* connectionsMsg){
     return connectionsMsg;
 }
 
-char* sendUsersMsg(struct user* user){
-    struct user* localHead = head;
-    struct user* localHead2 = head;
+char* sendUsersMsg(User* user){
+    User* localHead = head;
+    User* localHead2 = head;
     char joinMsg[30];
     int charsWritten;
 
@@ -84,7 +86,7 @@ char* sendUsersMsg(struct user* user){
     }
 }
 
-void displayConnected(struct user* user){
+void displayConnected(User* user){
     int charsWritten;
     char connectionsMsg[20];
 
@@ -94,16 +96,13 @@ void displayConnected(struct user* user){
     //send connection message
     charsWritten = send(user->userSocket, connectionsMsg, strlen(connectionsMsg), 0); 
 
-    //traverse();
-    //printf("%s\n", localHead->username);
-
     sendUsersMsg(user); //send who is online/joined to every user
 }
 
-int sendUsersOnline(struct user* user, char* message){
+int sendUsersOnline(User* user, char* message){
     char usersList[100];
     char usersHeader[20];
-    struct user* localHead = head;
+    User* localHead = head;
 
     //craft message 
     sprintf(usersHeader, "Users online (%d): ", usersOnline);
@@ -125,7 +124,7 @@ int sendUsersOnline(struct user* user, char* message){
 }
 
 /*send file descriptor message*/
-int sendFileDescriptor(struct user* user){
+int sendFileDescriptor(User* user){
     char fdString[15];
     sprintf(fdString, "Fd: %d$", user->userSocket);
     int charsWritten = send(user->userSocket, fdString, strlen(fdString), 0);
@@ -133,7 +132,7 @@ int sendFileDescriptor(struct user* user){
 }
 
 /*send user number message*/
-int sendUserNumber(struct user* user){
+int sendUserNumber(User* user){
     char numberString[20];
     sprintf(numberString, "User number: %d$", user->userNo);
     int charsWritten = send(user->userSocket, numberString, strlen(numberString), 0);
@@ -141,7 +140,7 @@ int sendUserNumber(struct user* user){
 }
 
 void debugInfo(){
-    struct user* localHead = head;
+    User* localHead = head;
     int count = 1;
     while(localHead != NULL){
         printf("-------------------------------------\n");
@@ -156,8 +155,37 @@ void debugInfo(){
     printf("-------------------------------------\n");
 }
 
+int sendPrivateMessage(User* user, char* message){
+    User* localHead = head;
+    char username[20];
+    char text[1000];
+
+    strcpy(username, strtok(message, " "));
+    strcpy(username, strtok(NULL, " "));
+    //strcpy(text, "[Private] ");
+    strcpy(text, user->username);
+    strcat(text, ": ");
+    char* token = strtok(NULL, " ");
+    while(token != NULL){
+        printf("%s\n", token);
+        strcat(text, token);
+        printf("%s\n", text);
+        token = strtok(NULL, " ");
+    }
+
+    //printf("%s\n", username);
+    while(strcmp(localHead->username, username) != 0 && localHead != NULL){
+        localHead = localHead->next;
+    }
+    if(localHead != NULL){
+        int charsWritten = send(localHead->userSocket, text, strlen(text)+1, 0);
+        charsWritten = send(user->userSocket, ".", 1, 0);
+    }
+    return 5;
+}
+
 /*Check messages for a command starting with $*/
-int checkMessage(struct user* user, char* message){
+int checkMessage(User* user, char* message){
     if(strcmp(message, "$users") == 0){
         return sendUsersOnline(user, message);
     }
@@ -167,11 +195,20 @@ int checkMessage(struct user* user, char* message){
     if(strcmp(message, "$number") == 0){
         return sendUserNumber(user);
     }
+    if(strstr(message, "$msg")){
+        return sendPrivateMessage(user, message);
+    }
+    /* invalid command */
+    if(message[0] == '$' && strcmp(message, EXIT) != 0){
+        //printf("here2\n");
+        int charsWritten = send(user->userSocket, "Invalid command.", 16, 0);
+        return 6;
+    }
     return 0;
 }
 
-void sendMessage(struct user* user, char* message, char context){
-    struct user* localHead = head; //head of linked list
+void sendMessage(User* user, char* message, char context){
+    User* localHead = head; //head of linked list
     char packaging[1000];
     char dot = '.';
     int charsWritten;
@@ -197,7 +234,7 @@ void sendMessage(struct user* user, char* message, char context){
     } 
 }
 
-void disconnect(struct user* user){
+void disconnect(User* user){
     printf("%s has left.\n", user->username);
     removeUser(user); //remove user from linked list
     usersOnline--; //decrease number of users online
@@ -207,7 +244,7 @@ void disconnect(struct user* user){
 void* connection(void* arg){
     
     //variable declaration/initialization
-    struct user* user = arg; //user for this connection
+    User* user = arg; //user for this connection
     int charsRead = 0, charsWritten = 0;
     char context;
     char message[1000];
@@ -241,7 +278,7 @@ void* connection(void* arg){
 }
 
 void deconstructThreads(){
-    struct user* localHead = head;
+    User* localHead = head;
     for(int i = 0; i < usersOnline; i++){
         pthread_join(localHead->thread, NULL);
         localHead = localHead->next;

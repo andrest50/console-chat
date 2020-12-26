@@ -4,19 +4,19 @@
 #include <pthread.h>
 
 //user struct
-struct user {
+typedef struct user {
     int userNo;
     char username[20];
     int userSocket;
     pthread_t thread;
     struct user* next;
-};
+} User;
 
-extern struct user* users;
-extern struct user* head;
+extern User* users;
+extern User* head;
 
-void removeUser(struct user*);
-void setupUser(struct user*, int, int);
+void removeUser(User*);
+void setupUser(User*, int, int);
 void addUser(int, int);
 
 #endif

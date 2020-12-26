@@ -11,14 +11,16 @@
 #include <sys/select.h>
 #include "commands.h"
 
-#define PORT 52500 //default port
-#define DEBUG 0
+#define PORT 52500 /* default port */
+#define DEBUG 0 /* 1 is on */
 #define EXIT "$e"
+#define MAX_MESSAGE_SIZE 1000
+#define MAX_USERNAME_SIZE 20
 
 int socketFD;
 int port = PORT;
 
-//function prototypes
+/* function prototypes */
 void setupAddressStruct(struct sockaddr_in*, int, char*);
 void getUserName(char*);
 int checkMessage(char*);
@@ -47,55 +49,50 @@ void setupAddressStruct(struct sockaddr_in* address, int portNumber, char* hostn
 }
 
 void getUserName(char* username){
-    //get username until it is valid
+    /* get username until it is valid */
     do {
         printf("Enter a username: ");
         scanf("%s", username);
-    } while(strlen(username) > 20);
+    } while(strlen(username) > MAX_USERNAME_SIZE);
     printf("Username set to %s\n", username);
 }
 
 int checkMessage(char* buffer){
     int charsWritten = 0;
 
-    //if user is sending a file
+    /* if user is sending a file */
     if(strstr(buffer, "$file")){
         char content[10000]; //contains file content
         char file[20]; //contains file name
         strcpy(file, strtok(buffer, " "));
         strcpy(file, strtok(NULL, " ")); //get file name as second argument to $file
 
-        //if file was specified        
+        /* if file was specified */       
         if(file != NULL){
             int errNo = 0; //indicates errors
             int* errPtr = &errNo;
             strcpy(content, getFileContents(file, content, errPtr)); //get file content
             content[strlen(content)] = '1'; //append the content
-            if(errNo == 0 && strlen(content) < 1000){
+            if(errNo == 0 && strlen(content) < MAX_MESSAGE_SIZE){
                 printf("%s\n", content);
                 charsWritten = send(socketFD, content, strlen(content), 0); //send to server
             }
             else
-                printf("File content is greater than 1000 bytes.\n");
+                printf("File content is greater than %d bytes.\n", MAX_MESSAGE_SIZE);
         }
         return 1;
     }
-    //print port number
+    /* print port number */
     if(strstr(buffer, "$port")){
         printf("Port: %d\n", port);
         return 2;    
     }
-    //empty line
+    /* empty line */
     if(strcmp(buffer, "") == 0){
         return 3;
     }
     if(strcmp(buffer, EXIT) == 0){
         return 4;
-    }
-    //invalid command
-    if(buffer[0] == '$'){
-        printf("Invalid command.\n");
-        return 5;
     }
     return 0;
 }
@@ -103,27 +100,27 @@ int checkMessage(char* buffer){
 void getMessage(char* buffer, char* username, int messagesSent){
     buffer[0] = '\0'; //clear buffer
 
-    //if first message, use extra fgets to avoid blank line
+    /* if first message, use extra fgets to avoid blank line */
     if(messagesSent == 0)
-        fgets(buffer, 1000, stdin);
+        fgets(buffer, MAX_MESSAGE_SIZE, stdin);
 
-    fgets(buffer, 1000, stdin); //get user input
+    fgets(buffer, MAX_MESSAGE_SIZE, stdin); //get user input
     buffer[strlen(buffer)-1] = '\0'; //remove newline
 }
 
 void receivedMessage(char* readBuffer, char context, char* username){
 
-    //if message is to be displayed
+    /* if message is to be displayed */
     if(context != '.'){
 
-        //if message is someone leaving chat
+        /* if message is someone leaving chat */
         if(strstr(readBuffer, EXIT)){
-            char userWhoLeft[20];
+            char userWhoLeft[MAX_USERNAME_SIZE];
             strcpy(userWhoLeft, strtok(readBuffer, ":"));
             printf("%s left.\n", userWhoLeft);
         }
         else {
-            //if there is user input
+            /* if there is user input */
             if ((fseek(stdin, 0, SEEK_END), ftell(stdin)) > 0){
                 fprintf(stdout, "\n%s\n", readBuffer);
             }
@@ -137,9 +134,9 @@ void receivedMessage(char* readBuffer, char context, char* username){
 }
 
 void returnMessage(char* message){
-    int charsRead = recv(socketFD, message, 1000, 0); //receive a response from server
+    int charsRead = recv(socketFD, message, MAX_MESSAGE_SIZE, 0); //receive a response from server
     
-    //if context is $ then print response (e.g. $port, $users)
+    /* if context is $ then print response (e.g. $port, $users) */
     if(message[charsRead-1] == '$'){
         message[charsRead-1] = '\0';
         printf("%s\n", message);
@@ -147,7 +144,7 @@ void returnMessage(char* message){
 }
 
 void sendMessage(char* message){
-    //print string length if on debug mode
+    /* print string length if on debug mode */
     if(DEBUG == 1)
         printf("message length: %ld\n", strlen(message));
 
@@ -155,25 +152,24 @@ void sendMessage(char* message){
     message[0] = '\0'; //clear message
 }
 
-//prompt user to display file content received
+/* prompt user to display file content received */
 int checkReceivedFileContent(){
     printf("You received file content. Do you want to display it. (1) yes (2) no.\n");
     int resp;
     //*[^\n]
     scanf("%d%*c", &resp); //get integer & throw out newline
-    //fflush(stdout);
     return resp;
 }
 
 int userInput(char* username, int* messagesSent){
-    char buffer[1000];
-    char message[1001];
+    char buffer[MAX_MESSAGE_SIZE];
+    char message[MAX_MESSAGE_SIZE+1];
 
     getMessage(buffer, username, *messagesSent); //get message
     int type = checkMessage(buffer); //check message for commands
     sprintf(message, "%s%d", buffer, type); //combine message + context
 
-    //if message is to be sent to server
+    /* if message is to be sent to server */
     if(type == 0){
         sendMessage(message); //send message to server
         returnMessage(message); //return response from server
@@ -185,32 +181,32 @@ int userInput(char* username, int* messagesSent){
 }
 
 void serverInput(char* username){
-    char readBuffer[1000];
+    char readBuffer[MAX_MESSAGE_SIZE];
     int accept = 1;
     
-    int charsRead = read(socketFD, readBuffer, 1000); //read from socket
+    int charsRead = read(socketFD, readBuffer, MAX_MESSAGE_SIZE); //read from socket
     if(charsRead == -1){
         perror("read()");
         exit(1);
     }
     char context = readBuffer[charsRead-1]; //store context
 
-    //check if context is a 1 to prompt for response
+    /* check if context is a 1 to prompt for response */
     if(context == 49) 
         accept = checkReceivedFileContent(); //user decides to accept content
     readBuffer[charsRead-1] = '\0';
     
-    //if user allows content to be displayed
+    /* if user allows content to be displayed */
     if(accept == 1)
         receivedMessage(readBuffer, context, username);
 }
 
 int main(int argc, char *argv[]) {
 
-    //variable declaration/initialization
+    /* variable declaration/initialization */
     int charsWritten, charsRead, messagesSent = 0;
     struct sockaddr_in serverAddress;
-    char username[20];
+    char username[MAX_USERNAME_SIZE];
 
     if (argc < 2) { 
         fprintf(stderr,"USAGE: %s port\n", argv[0]); 
@@ -242,7 +238,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     } 
 
-    //use select() for multiplexing, listening to stdin and socket
+    /* use select() for multiplexing, listening to stdin and socket */
     fd_set rfds;
     
     //loop until user leaves
@@ -251,17 +247,17 @@ int main(int argc, char *argv[]) {
         FD_SET(0, &rfds);
         FD_SET(socketFD, &rfds);
 
-        //use select for i/o multiplexing -- allowing input from socket and stdin somewhat concurrently
+        /* use select for i/o multiplexing -- allowing input from socket and stdin somewhat concurrently */
         if(select(socketFD + 1, &rfds, NULL, NULL, NULL) == -1){
             perror("select()");
             exit(1);
         }
-        //if there is user input in stdin
+        /* if there is user input in stdin */
         if(FD_ISSET(0, &rfds)){
             if(userInput(username, &messagesSent) == 1)
                 break;
         }
-        //if there is a message from socket
+        /* if there is a message from socket */
         if(FD_ISSET(socketFD, &rfds)){
             serverInput(username);
         }
