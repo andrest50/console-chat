@@ -7,8 +7,8 @@ This a program for experimenting with client-server interaction using a chatroom
 
 # Example
 Server hosting the chatroom: <br />
-![Server in action](/img/example_server.jpg)
+![Server in action](/img/example_server.jpg) <br /> <br />
 Client connecting and using the chatroom: <br />
-![Client in action](/img/example_client.jpg)
+![Client in action](/img/example_client.jpg) <br /> <br />
 Client using the user commands: <br />
 ![Client testing out user commands](/img/example_client2.jpg)
